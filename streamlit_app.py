@@ -4,158 +4,219 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from wordcloud import WordCloud
 
+# --- Page Configuration ---
+st.set_page_config(page_title="🚀 Startup Funding Analysis", layout="wide")
 
+# --- Custom CSS Styling ---
+st.markdown("""
+    <style>
+        .main {
+            background-color: #f9fafc;
+            padding: 2rem;
+        }
+        h1, h2, h3 {
+            text-align: center;
+            color: #333333;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .stSelectbox > div, .stNumberInput > div {
+            font-weight: 500;
+        }
+        .block-container {
+            padding: 2rem 2rem;
+        }
+        .dataframe th {
+            background-color: #f0f2f6;
+        }
+        .css-1cpxqw2 edgvbvh3 {  /* Removes Streamlit watermark */
+            visibility: hidden;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-st.set_page_config(layout="wide",page_title='startup analysis')
-df=pd.read_csv('startupfinal.csv')
-df2=pd.read_csv('df_explodes123.csv')
+# --- Page Header ---
+st.markdown("<h1>🚀 Startup Funding Analysis Dashboard</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;color:gray;font-size:18px;'>Explore Indian startup funding trends using interactive visualizations</p>", unsafe_allow_html=True)
+st.markdown("---")
+
+# --- Load and Preprocess Data ---
+df = pd.read_csv('startupfinal.csv')
+df2 = pd.read_csv('df_explodes123.csv')
+
 df2['date'] = pd.to_datetime(df2['date'], format='mixed', errors='coerce')
 df['date'] = pd.to_datetime(df['date'], format='mixed', errors='coerce')
+
 df['month'] = df['date'].dt.month
 df['year'] = df['date'].dt.year
 df['quarter'] = df['date'].dt.quarter
-df["yearmonth"] = (pd.to_datetime(df['date'],format='%d/%m/%Y').dt.year*100)+(pd.to_datetime(df['date'],format='%d/%m/%Y').dt.month)
-# # st.dataframe(df)
+df["yearmonth"] = (df['date'].dt.year * 100) + df['date'].dt.month
+
+
+
 def load_investor_details(investor):
+    # Add CSS for metric styling
+    st.markdown("""
+    <style>
+    .metric-block {
+        background-color: #f0f4f8;
+        padding: 1rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    div[data-testid="metric-container"] {
+        margin: 0 auto;
+        background-color: #ffffff;
+        padding: 10px;
+        border-radius: 10px;
+        box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Basic investor stats
     total = df['investors'].nunique()
-    # max amount infused in a startup
-    max_funding = df.groupby('investors')['amount'].max().sort_values(ascending=False).head(1).values[0]
-    # avg ticket size
+    max_funding = df.groupby('investors')['amount'].max().sort_values(ascending=False).iloc[0]
     avg_funding = df.groupby('investors')['amount'].sum().mean()
 
-
     col1, col2, col3 = st.columns(3)
-
     with col1:
-        st.metric('Total Investors', str(total))
+        st.metric('🧑‍💼 Total Investors', f"{total}")
     with col2:
-        st.metric('Max Funding By investor', str(max_funding))
-
+        st.metric('💸 Max Funding by Investor', f"{max_funding} Cr")
     with col3:
-        st.metric('Avg fuding byb investor', str(round(avg_funding)) + ' Cr')
+        st.metric('📊 Avg Funding per Investor', f"{round(avg_funding)} Cr")
 
-    last5_df=df2[df2['investors'].str.contains(investor)][['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']].head()
-    st.dataframe(last5_df)
+    st.markdown("---")
+    st.markdown("### 🕵️‍♂️ Last 5 Investments by this Investor")
+    last5_df = df2[df2['investors'].str.contains(investor, na=False)][
+        ['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']
+    ].head()
+    st.dataframe(last5_df, use_container_width=True)
 
     filtered_df = df2[df2['investors'].str.contains(investor, na=False)]
-
-    # Display Metrics
     total_investment = filtered_df['amount'].sum()
     num_startups = filtered_df['startup'].nunique()
-    st.metric("Total Investment Amount", f"{total_investment}")
-    st.metric("Number of Startups Invested In", num_startups)
 
+    col4, col5 = st.columns(2)
+    with col4:
+        st.metric("📈 Total Investment Amount", f"{total_investment} Cr")
+    with col5:
+        st.metric("🏢 Number of Startups Funded", num_startups)
 
-
-    # Filter the DataFrame to find the vertical of the given startup
+    st.markdown("---")
+    st.markdown("### 🧬 Similar Startups in the Same Sector")
     filtered = df2[df2['investors'] == investor]['vertical']
 
-    # Check if the entry is present
     if not filtered.empty:
-        # Extract the first vertical value
         vertical_value = filtered.values[0]
-        # Filter the DataFrame where the vertical matches
         x = df2[df2['vertical'] == vertical_value][['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']].sample(4)
-        st.dataframe(x)
+        st.dataframe(x, use_container_width=True)
     else:
-        # Handle the case where the entry is not present
-        print(f"Entry for startup '{investor}' not present in the DataFrame.")
+        st.warning(f"No entry for investor: **{investor}** found.")
 
-    # Layout with Columns
-    col1, col2 = st.columns(2)
-
-    # Column 1: Biggest Investments and Sector Distribution
+    st.markdown("---")
+    # First row of charts
+    col1, col2 = st.columns([1.2, 1.8])
     with col1:
-        # Biggest Investments
+        st.markdown("### 💼 Top 5 Startups by Investment")
         bigseries = (
             filtered_df.groupby('startup')['amount']
             .sum()
             .sort_values(ascending=False)
             .head()
         )
-        st.subheader('Top 5 Startups by Investment')
-        fig, ax = plt.subplots(figsize=(8, 6.85))  # Uniform size for all charts in this column
-        ax.bar(bigseries.index, bigseries.values, color='skyblue')
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.bar(bigseries.index, bigseries.values, color='#00aaff')
         ax.set_xlabel('Startup')
-        ax.set_ylabel('Investment Amount')
-        ax.set_title('Top Investments')
+        ax.set_ylabel('Investment Amount (Cr)')
+        ax.set_title('Top Investments', fontsize=14)
+        ax.grid(axis='y', linestyle='--', alpha=0.7)
+        fig.tight_layout()
         st.pyplot(fig)
 
-        # Sector Distribution
-        vertical_series = (
-            filtered_df.groupby('vertical')['amount'].sum()
-        )
-        st.subheader('Sector Distribution')
-        fig1, ax1 = plt.subplots(figsize=(8, 5))  # Uniform size
+    with col2:
+        st.markdown("### 🧭 Sector-wise Distribution")
+        vertical_series = filtered_df.groupby('vertical')['amount'].sum()
+        fig1, ax1 = plt.subplots(figsize=(8, 6))
         ax1.pie(
             vertical_series,
             labels=vertical_series.index,
             autopct="%0.01f%%",
             startangle=90,
-            colors=plt.cm.tab10.colors
+            colors=sns.color_palette("pastel")
         )
         ax1.set_title('Sector Breakdown')
+        ax1.axis('equal')
+        fig1.tight_layout()
         st.pyplot(fig1)
 
-    # Column 2: Rounds and Cities
-    with col2:
-        # Investment Rounds
-        round_series = (
-            filtered_df.groupby('round')['amount'].sum()
-        )
-        st.subheader('Investment Rounds')
-        fig2, ax2 = plt.subplots(figsize=(8, 5))  # Uniform size
-        ax2.pie(
-            round_series,
-            labels=round_series.index,
-            autopct="%0.01f%%",
-            startangle=90,
-            colors=plt.cm.Paired.colors
-        )
-        ax2.set_title('Round Breakdown')
-        st.pyplot(fig2)
+    st.markdown("---")
+    # Second row of pie charts
+    with st.container():
+        col3, col4 = st.columns(2)
+        with col3:
+            st.markdown("### 🔄 Investment Rounds Distribution")
+            round_series = filtered_df.groupby('round')['amount'].sum()
+            fig2, ax2 = plt.subplots(figsize=(8, 6))
+            ax2.pie(
+                round_series,
+                labels=round_series.index,
+                autopct="%0.01f%%",
+                startangle=140,
+                colors=sns.color_palette("Set2")
+            )
+            ax2.set_title('Breakdown by Rounds')
+            ax2.axis('equal')
+            fig2.tight_layout()
+            st.pyplot(fig2)
 
-        # City Distribution
-        city_series = (
-            filtered_df.groupby('city')['amount'].sum()
-        )
-        st.subheader('City-wise Investment')
-        fig3, ax3 = plt.subplots(figsize=(8, 6))  # Uniform size
-        ax3.pie(
-            city_series,
-            labels=city_series.index,
-            autopct="%0.01f%%",
-            startangle=90,
-            colors=plt.cm.Set3.colors
-        )
-        ax3.set_title('City Breakdown')
-        st.pyplot(fig3)
+        with col4:
+            st.markdown("### 🌆 City-wise Funding Distribution")
+            city_series = filtered_df.groupby('city')['amount'].sum()
+            fig3, ax3 = plt.subplots(figsize=(8, 6))
+            ax3.pie(
+                city_series,
+                labels=city_series.index,
+                autopct="%0.01f%%",
+                startangle=140,
+                colors=sns.color_palette("husl")
+            )
+            ax3.set_title('City-wise Investment Breakdown')
+            ax3.axis('equal')
+            fig3.tight_layout()
+            st.pyplot(fig3)
 
-    # Year-over-Year Investment
+    st.markdown("---")
+    # Year-over-Year Trend
+    st.markdown("### 📈 Year-over-Year Investment Trend")
     df2['year'] = df2['date'].dt.year
     year_series = (
         df2[df2['investors'].str.contains(investor, na=False)]
         .groupby('year')['amount']
         .sum()
     )
-    st.subheader('Year-over-Year Investment Trend')
-    fig4, ax4 = plt.subplots(figsize=(10, 4))  # Different size for the trend graph
-    ax4.plot(
-        year_series.index,
-        year_series.values,
+    fig4, ax4 = plt.subplots(figsize=(10, 4.5))
+    sns.lineplot(
+        x=year_series.index,
+        y=year_series.values,
         marker='o',
-        linestyle='-',
-        color='green',
-        label='Investment Amount'
+        linewidth=2,
+        color='#2E8B57',
+        ax=ax4
     )
+    ax4.set_title('Yearly Funding Trend', fontsize=14)
     ax4.set_xlabel('Year')
-    ax4.set_ylabel('Total Investment')
-    ax4.set_title('YoY Investment Trend')
-    ax4.grid(True)
-    ax4.legend()
+    ax4.set_ylabel('Total Investment (in Cr)')
+    ax4.grid(visible=True, linestyle='--', alpha=0.6)
+    fig4.tight_layout()
     st.pyplot(fig4)
 
+
+
 @st.cache_data
+
 def load_overall_analysis():
     import streamlit as st
     import pandas as pd
@@ -163,438 +224,203 @@ def load_overall_analysis():
     import matplotlib.pyplot as plt
     from wordcloud import WordCloud
 
-    # Set Seaborn theme
     sns.set_theme(style="whitegrid")
+    st.title("📊 Overall Startup Funding Analysis")
 
-    st.title('Overall Analysis')
-
-    # Total invested amount
+    # Core Metrics
     total = round(df['amount'].sum())
-    max_funding = df.groupby('startup')['amount'].max().sort_values(ascending=False).head(1).values[0]
+    max_funding = df.groupby('startup')['amount'].max().max()
     avg_funding = df.groupby('startup')['amount'].sum().mean()
     num_startups = df['startup'].nunique()
 
-    # Most funded startups
-    df_sorted = df.sort_values(by='amount', ascending=False)
-    st.subheader('Top 5 Most Funded Startups')
-    st.dataframe(df_sorted[['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']].head(5))
-
-    # Metrics
     col1, col2, col3, col4 = st.columns(4)
+    col1.metric("💰 Total Investment", f"{total} Cr")
+    col2.metric("🚀 Max Investment", f"{max_funding} Cr")
+    col3.metric("📈 Avg Investment", f"{round(avg_funding)} Cr")
+    col4.metric("🏢 Funded Startups", num_startups)
 
-    with col1:
-        st.metric('Total Investment', f"{total} Cr")
-    with col2:
-        st.metric('Max Investment', f"{max_funding} Cr")
-    with col3:
-        st.metric('Average Investment', f"{round(avg_funding)} Cr")
-    with col4:
-        st.metric('Funded Startups', num_startups)
+    # Most Funded Startups Table
+    st.markdown("### 💼 Top 5 Most Funded Startups")
+    df_sorted = df.sort_values(by='amount', ascending=False)
+    st.dataframe(df_sorted[['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']].head(5), use_container_width=True)
 
+    # Year-Month Funding Trend
+    st.markdown("### 📅 Funding Trend Over Time")
+    year_month = df['yearmonth'].value_counts().sort_index()
+    fig, ax = plt.subplots(figsize=(14, 6))
+    sns.barplot(x=year_month.index, y=year_month.values, palette="Blues_d", ax=ax)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.set_title("Funding Activity Over Time", fontsize=16)
+    ax.set_xlabel("Year-Month")
+    ax.set_ylabel("No. of Fundings")
+    st.pyplot(fig)
 
+    # Top Startups by Count
+    st.markdown("### 🏆 Top 20 Startups by Number of Fundings")
+    top_startups = df['startup'].value_counts().head(20)
+    fig, ax = plt.subplots(figsize=(14, 6))
+    sns.barplot(x=top_startups.index, y=top_startups.values, palette="coolwarm", ax=ax)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.set_title("Most Active Startups", fontsize=16)
+    st.pyplot(fig)
 
-    # Year-Month distribution
-    st.header('YOY Graph')
-    year_month = df['yearmonth'].value_counts()
-    plt.figure(figsize=(15, 6))
-    sns.barplot(x=year_month.index, y=year_month.values, palette="Blues_d")
-    plt.xticks(rotation=45, fontsize=10)
-    plt.xlabel('Year-Month of Transaction', fontsize=12)
-    plt.ylabel('Number of Fundings Made', fontsize=12)
-    plt.title("Year-Month Distribution of Fundings", fontsize=16)
-    st.pyplot(plt)
+    # Top Startups by Total Amount
+    st.markdown("### 💸 Top 10 Startups by Total Funding")
+    startup_funding = df.groupby('startup')['amount'].sum().nlargest(10).reset_index()
+    fig, ax = plt.subplots(figsize=(14, 6))
+    sns.barplot(data=startup_funding, x='startup', y='amount', palette="viridis", ax=ax)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.set_title("Top Funded Startups", fontsize=16)
+    st.pyplot(fig)
 
-    # Top 20 Startups by funding
-    startupname = df['startup'].value_counts().head(20)
-    plt.figure(figsize=(15, 6))
-    sns.barplot(x=startupname.index, y=startupname.values, palette="coolwarm")
-    plt.xticks(rotation=45, fontsize=10)
-    plt.xlabel('Startup Name', fontsize=12)
-    plt.ylabel('Number of Fundings Made', fontsize=12)
-    plt.title("Top 20 Startups by Number of Fundings", fontsize=16)
-    for i, v in enumerate(startupname.values):
-        plt.text(i, v + 1, str(v), ha='center', fontsize=9)
-    st.pyplot(plt)
-
-    # Total funding received by startups
-    startup_funding = df.groupby(['startup'])['amount'].sum().sort_values(ascending=False).head(10).reset_index()
-    plt.figure(figsize=(15, 6))
-    sns.barplot(x='startup', y='amount', data=startup_funding, palette="viridis")
-    plt.xticks(rotation=45, fontsize=10)
-    plt.xlabel('Startup Name', fontsize=12)
-    plt.ylabel('Total Funding Amount (Cr)', fontsize=12)
-    plt.title("Top 10 Startups by Total Funding Received", fontsize=16)
-    for i, v in enumerate(startup_funding['amount']):
-        plt.text(i, v, f"{v:.2f}", ha='center', fontsize=9)
-    st.pyplot(plt)
-
-    # Industry verticals
-    st.text('Which industries are favored by investors for funding?')
+    # Industry-wise
+    st.markdown("### 🏭 Industry-Wise Funding Distribution")
     industry = df['vertical'].value_counts().head(10)
-    plt.figure(figsize=(15, 6))
-    sns.barplot(x=industry.index, y=industry.values, palette="Set2")
-    plt.xticks(rotation=45, fontsize=10)
-    plt.xlabel('Industry Vertical', fontsize=12)
-    plt.ylabel('Number of Fundings Made', fontsize=12)
-    plt.title("Top 10 Industry Verticals by Fundings", fontsize=16)
-    for i, v in enumerate(industry.values):
-        plt.text(i, v + 1, str(v), ha='center', fontsize=9)
-    st.pyplot(plt)
+    fig, ax = plt.subplots(figsize=(14, 6))
+    sns.barplot(x=industry.index, y=industry.values, palette="Set2", ax=ax)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.set_title("Top Funded Industry Verticals", fontsize=16)
+    st.pyplot(fig)
 
-    # City-wise funding
-    st.header('City-wise Analysis of Funding')
+    # City-wise
+    st.markdown("### 🌆 City-wise Funding Analysis")
     city = df['city'].value_counts().head(10)
-    plt.figure(figsize=(15, 6))
-    sns.barplot(x=city.index, y=city.values, palette="pastel")
-    plt.xticks(rotation=45, fontsize=10)
-    plt.xlabel('City', fontsize=12)
-    plt.ylabel('Number of Fundings Made', fontsize=12)
-    plt.title("Top 10 Cities by Number of Fundings", fontsize=16)
-    for i, v in enumerate(city.values):
-        plt.text(i, v + 1, str(v), ha='center', fontsize=9)
-    st.pyplot(plt)
+    fig, ax = plt.subplots(figsize=(14, 6))
+    sns.barplot(x=city.index, y=city.values, palette="pastel", ax=ax)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.set_title("Top Funded Cities", fontsize=16)
+    st.pyplot(fig)
 
-    # Wordcloud for investors
-    st.subheader('Key Investors in the Indian Ecosystem')
+    # WordCloud of Investors
+    st.markdown("### ☁️ Most Frequent Investors")
     names = df["investors"].dropna()
-    wordcloud = WordCloud(max_font_size=50, width=800, height=400, colormap="Dark2").generate(' '.join(names))
-    plt.figure(figsize=(15, 8))
-    plt.imshow(wordcloud, interpolation='bilinear')
-    plt.axis("off")
-    plt.title("Wordcloud of Investors", fontsize=20)
-    st.pyplot(plt)
+    wordcloud = WordCloud(max_font_size=60, width=800, height=400, colormap="Dark2").generate(' '.join(names))
+    fig, ax = plt.subplots(figsize=(14, 7))
+    ax.imshow(wordcloud, interpolation='bilinear')
+    ax.axis("off")
+    st.pyplot(fig)
 
-    # Top investors by number of fundings
+    # Top Investors by Count
+    st.markdown("### 🏦 Top 10 Investors by Number of Deals")
     investors = df['investors'].value_counts().head(10)
-    plt.figure(figsize=(15, 6))
-    sns.barplot(x=investors.index, y=investors.values, palette="RdYlBu")
-    plt.xticks(rotation=45, fontsize=10)
-    plt.xlabel('Investor Name', fontsize=12)
-    plt.ylabel('Number of Fundings Made', fontsize=12)
-    plt.title("Top 10 Investors by Number of Fundings", fontsize=16)
-    for i, v in enumerate(investors.values):
-        plt.text(i, v + 1, str(v), ha='center', fontsize=9)
-    st.pyplot(plt)
+    fig, ax = plt.subplots(figsize=(14, 6))
+    sns.barplot(x=investors.index, y=investors.values, palette="RdYlBu", ax=ax)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.set_title("Most Active Investors", fontsize=16)
+    st.pyplot(fig)
 
-    # Types of funding rounds
-    st.subheader('Types of Funding Rounds')
+    # Top Investors by Total Funding
+    st.markdown("### 💼 Top 10 Investors by Investment Amount")
+    investor_funding = df.groupby('investors')['amount'].sum().nlargest(10).reset_index()
+    fig, ax = plt.subplots(figsize=(14, 6))
+    sns.barplot(x='investors', y='amount', data=investor_funding, palette="cubehelix", ax=ax)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.set_title("Biggest Investors by Capital", fontsize=16)
+    st.pyplot(fig)
+
+    # Round Types
+    st.markdown("### 🔄 Types of Funding Rounds")
     investment = df['round'].value_counts().head(8)
-    plt.figure(figsize=(15, 6))
-    sns.barplot(x=investment.index, y=investment.values, palette="coolwarm")
-    plt.xticks(rotation=45, fontsize=10)
-    plt.xlabel('Investment Type', fontsize=12)
-    plt.ylabel('Number of Fundings Made', fontsize=12)
-    plt.title("Funding Rounds by Number of Fundings", fontsize=16)
-    for i, v in enumerate(investment.values):
-        plt.text(i, v + 1, str(v), ha='center', fontsize=9)
-    st.pyplot(plt)
-
-    # Total funding by investors
-    investor_funding = df.groupby(['investors'])['amount'].sum().sort_values(ascending=False).head(10).reset_index()
-    plt.figure(figsize=(15, 6))
-    sns.barplot(x='investors', y='amount', data=investor_funding, palette="cubehelix")
-    plt.xticks(rotation=45, fontsize=10)
-    plt.xlabel('Investor Name', fontsize=12)
-    plt.ylabel('Total Funding Amount (Cr)', fontsize=12)
-    plt.title("Top 10 Investors by Total Funding Amount", fontsize=16)
-    for i, v in enumerate(investor_funding['amount']):
-        plt.text(i, v, f"{v:.2f}", ha='center', fontsize=9)
-    st.pyplot(plt)
-
-    # st.title('Overall Analysis')
-    #
-    # # total invested amount
-    # total = round(df['amount'].sum())
-    # # max amount infused in a startup
-    # max_funding = df.groupby('startup')['amount'].max().sort_values(ascending=False).head(1).values[0]
-    # # avg ticket size
-    # avg_funding = df.groupby('startup')['amount'].sum().mean()
-    # # total funded startups
-    # num_startups = df['startup'].nunique()
-    #
-    # df_sorted = df.sort_values(by='amount', ascending=False)
-    # st.subheader('most funded')
-    # st.dataframe(df_sorted.head(5))
-    #
-    #
-    #
-    # col1,col2,col3,col4 = st.columns(4)
-    #
-    # with col1:
-    #     st.metric('Total',str(total) + ' Cr')
-    # with col2:
-    #     st.metric('Max', str(max_funding) + ' Cr')
-    #
-    # with col3:
-    #     st.metric('Avg',str(round(avg_funding)) + ' Cr')
-    #
-    # with col4:
-    #     st.metric('Funded Startups',num_startups)
-    #
-    # st.header('YOY graph')
-    # temp = df['yearmonth'].value_counts().sort_values(ascending=False).head(10)
-    # year_month = df['yearmonth'].value_counts()
-    #
-    # # Plotting
-    # plt.figure(figsize=(15, 8))
-    # sns.barplot(x=year_month.index, y=year_month.values, alpha=0.9)
-    # plt.xticks(rotation='vertical')
-    # plt.xlabel('Year-Month of transaction', fontsize=12)
-    # plt.ylabel('Number of fundings made', fontsize=12)
-    # plt.title("Year-Month Distribution", fontsize=16)
-    #
-    # st.pyplot(plt)
-    #
-    #
-    #
-    #
-    # startupname = df['startup'].value_counts().head(20)
-    # plt.figure(figsize=(15, 8))
-    # sns.barplot(x=startupname.index, y=startupname.values, alpha=0.9)
-    # plt.xticks(rotation='vertical')
-    # plt.xlabel('Startup Name', fontsize=12)
-    # plt.ylabel('Number of fundings made', fontsize=12)
-    # plt.title("Number of funding a startup got", fontsize=16)
-    # st.pyplot(plt)
-    #
-    #
-    # startupname = df.groupby(['startup'])['amount'].sum().sort_values(ascending=False).head(10).reset_index()
-    #
-    # # Plotting
-    # plt.figure(figsize=(15, 8))
-    # sns.barplot(x='startup', y='amount', data=startupname, alpha=0.9)
-    # plt.xticks(rotation='vertical')
-    # plt.xlabel('Startup Name', fontsize=12)
-    # plt.ylabel('Total Funding Amount', fontsize=12)
-    # plt.title("Total Funding Received by Startups", fontsize=16)
-    #
-    # # Display plot in Streamlit
-    # st.pyplot(plt)
-    #
-    #
-    #
-    #
-    # st.text('Which industries are favored by investors for funding ? (OR) Which type of companies got more easily funding ?')
-    # industry = df['vertical'].value_counts().head(10)
-    #
-    # plt.figure(figsize=(15, 8))
-    # sns.barplot(x=industry.index, y=industry.values, alpha=0.9)
-    # plt.xticks(rotation='vertical')
-    # plt.xlabel('Industry vertical of startups', fontsize=12)
-    # plt.ylabel('Number of fundings made', fontsize=12)
-    # plt.title("Industry vertical of startups with number of funding", fontsize=16)
-    # st.pyplot(plt)
-    # city = df['city'].value_counts().head(10)
-    # st.header('Do cities play a major role in funding ? (OR) Which city has maximum startups ?')
-    # plt.figure(figsize=(15, 8))
-    # sns.barplot(x=city.index, y=city.values, alpha=0.9)
-    # plt.xticks(rotation='vertical')
-    # plt.xlabel('city location of startups', fontsize=12)
-    # plt.ylabel('Number of fundings made', fontsize=12)
-    # plt.title("city location of startups with number of funding", fontsize=16)
-    # st.pyplot(plt)
-    #
-    #
-    # st.subheader('Who is the important investors in the Indian Ecosystem?')
-    # names = df["investors"][~pd.isnull(df["investors"])]
-    # # print(names)
-    # wordcloud = WordCloud(max_font_size=50, width=600, height=300).generate(' '.join(names))
-    # plt.figure(figsize=(15, 8))
-    # plt.imshow(wordcloud)
-    # plt.title("Wordcloud for Investor Names", fontsize=35)
-    # plt.axis("off")
-    # st.pyplot(plt)
-    #
-    # investors = df['investors'].value_counts().head(10)
-    # plt.figure(figsize=(15, 8))
-    # sns.barplot(x=investors.index, y=investors.values, alpha=0.9)
-    # plt.xticks(rotation='vertical')
-    # plt.xlabel('Investors Names', fontsize=12)
-    # plt.ylabel('Number of fundings made', fontsize=12)
-    # plt.title("Investors Names with number of funding", fontsize=16)
-    #
-    #
-    # st.pyplot(plt)
-    # st.subheader('What are different types of funding for startups ?')
-    # investment = df['round'].value_counts().head(8)
-    # plt.figure(figsize=(15, 8))
-    # sns.barplot(x=investment.index, y=investment.values, alpha=0.9)
-    # plt.xticks(rotation='vertical')
-    # plt.xlabel('Investment Type', fontsize=12)
-    # plt.ylabel('Number of fundings made', fontsize=12)
-    # plt.title("Investment Type with number of funding", fontsize=16)
-    # st.pyplot(plt)
-    #
-    # startupname = df.groupby(['investors'])['amount'].sum().sort_values(ascending=False).head(10).reset_index()
-    #
-    # # Plotting
-    # plt.figure(figsize=(15, 8))
-    # sns.barplot(x='investors', y='amount', data=startupname, alpha=0.9)
-    # plt.xticks(rotation='vertical')
-    # plt.xlabel('Startup Name', fontsize=12)
-    # plt.ylabel('Total Funding Amount', fontsize=12)
-    # plt.title("Total Funding Received by investors", fontsize=16)
-    #
-    # # Display plot in Streamlit
-    # st.pyplot(plt)
-
-
+    fig, ax = plt.subplots(figsize=(14, 6))
+    sns.barplot(x=investment.index, y=investment.values, palette="coolwarm", ax=ax)
+    ax.set_title("Popular Investment Rounds", fontsize=16)
+    st.pyplot(fig)
 def load_startup_details(startups):
     import streamlit as st
     import pandas as pd
     import seaborn as sns
     import matplotlib.pyplot as plt
 
-    # Set Seaborn theme for consistency
     sns.set_theme(style="whitegrid")
 
-    st.title('Startup Analysis')
+    # 🔧 Custom CSS for better layout
+    st.markdown("""
+    <style>
+        .block-container { padding-top: 2rem; }
+        h1, h2, h3 { color: #333333; }
+        .metric { background: #f9f9f9; padding: 1rem; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+    </style>
+    """, unsafe_allow_html=True)
 
-    # Sorting by funding amount
+    st.title(f"🚀 Analysis of **{startups}**")
 
+    # 🎯 Filtered data
+    df_startup = df[df['startup'].str.lower() == startups.lower()]
+    df_startup2 = df2[df2['startup'].str.lower().str.contains(startups.lower(), na=False)]
 
-    # Metrics for the selected startup
-    # Replace with user input if applicable
-    total = df[df['startup'] == startups].shape[0]
-    max_funding = df[df['startup'] == startups]['amount'].max()
-    avg_funding = df[df['startup'] == startups]['amount'].mean()
-    totalinvest = df2[df2['startup'].str.contains(startups, case=False)]['investors'].nunique()
+    # 📌 Metrics
+    total_rounds = df_startup.shape[0]
+    max_funding = df_startup['amount'].max()
+    avg_funding = df_startup['amount'].mean()
+    unique_investors = df_startup2['investors'].str.split(',').explode().str.strip().nunique()
 
-    # Display metrics
     col1, col2, col3, col4 = st.columns(4)
+    col1.metric("🔁 Total Rounds", total_rounds)
+    col2.metric("💸 Max Investment", f"{max_funding} Cr")
+    col3.metric("📈 Avg Investment", f"{round(avg_funding)} Cr")
+    col4.metric("👥 Unique Investors", unique_investors)
 
-    with col1:
-        st.metric('Total Investments', str(total))
-    with col2:
-        st.metric('Max Investment', f"{max_funding} Cr")
-    with col3:
-        st.metric('Average Investment', f"{round(avg_funding)} Cr")
-    with col4:
-        st.metric('Total Unique Investors', str(totalinvest))
+    # 📅 Recent Funding Rounds
+    st.markdown("### 📅 Recent Funding Rounds")
+    st.dataframe(
+        df_startup[['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']]
+        .sort_values(by='date', ascending=False),
+        use_container_width=True
+    )
 
-    # Display funding details for the startup
-    df3 = df[df['startup'] == startups][['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']].head()
-    st.dataframe(df3, width=1300)
-
-    # Vertical-related startups
-    filtered = df[df['startup'] == startups]['vertical']
-
-    if not filtered.empty:
-        vertical_value = filtered.values[0]
-        similar_startups = df[df['vertical'] == vertical_value][
-            ['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']].sample(4)
-        st.subheader(f'Similar Startups to {startups}')
-        st.dataframe(similar_startups)
+    # 🧬 Similar Startups
+    vertical = df_startup['vertical'].dropna().values[0] if not df_startup.empty else None
+    if vertical:
+        st.markdown(f"### 🧬 Similar Startups in **{vertical}**")
+        similar_startups = df[df['vertical'] == vertical].sample(min(5, len(df[df['vertical'] == vertical])))
+        st.dataframe(similar_startups[['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']],
+                     use_container_width=True)
     else:
-        st.warning(f"No data found for startup '{startups}'.")
+        st.warning("Could not find vertical information for the selected startup.")
 
-    # Year-over-Year Investment Trend
-    df2['year'] = df2['date'].dt.year
-    year_series = (
-        df[df['startup'] == startups]
-        .groupby('yearmonth')['amount']
+    # 📈 YoY Investment Trend
+    st.markdown("### 📈 Year-over-Year Investment Trend")
+    df['yearmonth'] = pd.to_datetime(df['date']).dt.to_period('M')
+    yoy_data = (
+        df_startup.groupby('yearmonth')['amount']
         .sum()
+        .reset_index()
     )
+    yoy_data['yearmonth'] = yoy_data['yearmonth'].astype(str)
 
-    st.subheader('Year-over-Year Investment Trend')
+    fig1, ax1 = plt.subplots(figsize=(12, 5))
+    sns.lineplot(data=yoy_data, x='yearmonth', y='amount', marker='o', linewidth=2, color='#2E8B57', ax=ax1)
+    ax1.set_title(f"YoY Funding Trend for {startups}", fontsize=14)
+    ax1.set_xlabel("Year-Month")
+    ax1.set_ylabel("Total Investment (Cr)")
+    ax1.grid(True, linestyle='--', alpha=0.6)
+    ax1.set_xticklabels(ax1.get_xticklabels(), rotation=45)
+    st.pyplot(fig1)
 
-    # Plotting YoY Trend
-    fig4, ax4 = plt.subplots(figsize=(12, 6))
-    ax4.plot(
-        year_series.index,
-        year_series.values,
-        marker='o',
-        linestyle='-',
-        color='green',
-        label='Investment Amount'
-    )
-    ax4.set_xlabel('Year-Month', fontsize=12)
-    ax4.set_ylabel('Total Investment (Cr)', fontsize=12)
-    ax4.set_title(f'YoY Investment Trend for {startups}', fontsize=16)
-    ax4.grid(True, linestyle='--', alpha=0.6)
-    ax4.legend(loc='upper left', fontsize=10)
+    # 🎯 Additional Insights
+    st.markdown("### 🧭 Investment Round & City-Wise Distribution")
+    col5, col6 = st.columns(2)
 
-    # Adding value annotations
-    for i, (x, y) in enumerate(zip(year_series.index, year_series.values)):
-        ax4.text(x, y, f"{y:.2f}", ha='center', va='bottom', fontsize=9)
+    # Round-wise investment
+    with col5:
+        round_dist = df_startup['round'].value_counts()
+        fig2, ax2 = plt.subplots(figsize=(6, 5))
+        ax2.pie(round_dist, labels=round_dist.index, autopct='%1.1f%%', startangle=90, colors=sns.color_palette("Set2"))
+        ax2.set_title("Round Distribution")
+        st.pyplot(fig2)
 
-    st.pyplot(fig4)
-
-    # Enhanced DataFrame and Graph Visuals
-    st.subheader(f"Analysis of {startups}'s Investment Data")
-
-    # st.title('Startup Analysis')
-    # df_sorted = df.sort_values(by='amount', ascending=False)
-    # st.subheader('most funded')
-    # st.dataframe(df_sorted.head(5))
-    # if st.checkbox('Show dataframe'):
-    #     chart_data = df_sorted
-    # # total invested amount
-    # total = df[df['startup']==startups].shape[0]
-    # print(total)
-    # # max amount infused in a startup
-    # max_funding = df[df['startup']==startups]['amount'].max()
-    # # avg ticket size
-    # avg_funding = df[df['startup']==startups]['amount'].mean()
-    # # total funded startups
-    # totalinvest=df2[df2['startup'].str.contains('ola')]['investors'].nunique()
-    # col1, col2, col3, col4 = st.columns(4)
-    #
-    # with col1:
-    #     st.metric('Total', str(total))
-    # with col2:
-    #     st.metric('Max', str(max_funding) + ' Cr')
-    # with col3:
-    #     st.metric('Avg', str(round(avg_funding)) + ' Cr')
-    # with col4:
-    #     st.metric('Total investors',str(totalinvest))
-    # df3=df[df['startup']==startups][['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']].head()
-    # st.dataframe(df3,width=1300)
-    #
-    #
-    # # Filter the DataFrame to find the vertical of the given startup
-    # filtered = df[df['startup'] == startups]['vertical']
-    #
-    # # Check if the entry is present
-    # if not filtered.empty:
-    #     # Extract the first vertical value
-    #     vertical_value = filtered.values[0]
-    #     # Filter the DataFrame where the vertical matches
-    #     x = df[df['vertical'] == vertical_value][['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']].sample(4)
-    #     st.subheader('Same startup as {}'.format(startups))
-    #     st.dataframe(x)
-    # else:
-    #     # Handle the case where the entry is not present
-    #     print(f"Entry for startup '{startups}' not present in the DataFrame.")
-    #
-    # df2['year'] = df2['date'].dt.year
-    # year_series = (
-    #     df[df['startup']==startups]
-    #     .groupby('yearmonth')['amount']
-    #     .sum()
-    # )
-    # st.subheader('Year-over-Year Investment Trend')
-    # fig4, ax4 = plt.subplots(figsize=(10, 4))  # Different size for the trend graph
-    # ax4.plot(
-    #     year_series.index,
-    #     year_series.values,
-    #     marker='o',
-    #     linestyle='-',
-    #     color='green',
-    #     label='Investment Amount'
-    # )
-    # ax4.set_xlabel('Year')
-    # ax4.set_ylabel('Total Investment')
-    # ax4.set_title('YoY Investment Trend')
-    # ax4.grid(True)
-    # ax4.legend()
-    # st.pyplot(fig4)
-
+    # City-wise investment
+    with col6:
+        city_dist = df_startup['city'].value_counts()
+        fig3, ax3 = plt.subplots(figsize=(6, 5))
+        ax3.pie(city_dist, labels=city_dist.index, autopct='%1.1f%%', startangle=90, colors=sns.color_palette("pastel"))
+        ax3.set_title("City Distribution")
+        st.pyplot(fig3)
 
 
 df['investors']=df['investors'].fillna('Undisclosed')
 st.sidebar.title('Startup Funding Analysis')
-st.title('Which Startup You Want To search for?')
+
 option = st.sidebar.selectbox('Select One',['Overall Analysis','Startup','Investor','Question Answer'])
 
 
@@ -612,7 +438,31 @@ elif option=='Investor':
     if btn2:
         load_investor_details(selected_investor)
 else:
-    # Selectbox for visualizations
+    # Inject CSS for improved UI
+    st.markdown("""
+    <style>
+    .question-card {
+        background-color: #f9f9f9;
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    .question-title {
+        font-size: 22px;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: #2c3e50;
+    }
+    .stSelectbox > div {
+        font-size: 16px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="question-card">', unsafe_allow_html=True)
+    st.markdown('<div class="question-title">🧠 Choose a Visualization</div>', unsafe_allow_html=True)
+
     questions = [
         'selectone',
         "1. Top 5 Most Funded Startups",
@@ -625,103 +475,116 @@ else:
         "8. Top 10 Investors by Number of Fundings",
         "9. Funding Rounds by Number of Fundings"
     ]
-
     selected_question = st.selectbox('Select Analysis Type', questions)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Logic for each visualization
-    if selected_question == questions[1]:  # Top 5 Most Funded Startups
+    # Now show chart sections based on selected question
+    def show_chart(fig=None):
+        st.markdown('<div class="question-card">', unsafe_allow_html=True)
+        if fig:
+            st.pyplot(fig)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    if selected_question == questions[1]:
         df_sorted = df.sort_values(by='amount', ascending=False)
-        st.subheader('Top 5 Most Funded Startups')
-        st.dataframe(df_sorted[['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']].head().head(5))
+        st.markdown("#### 📌 Top 5 Most Funded Startups")
+        st.dataframe(df_sorted[['date', 'startup', 'vertical', 'city', 'investors', 'round', 'amount']].head(5), use_container_width=True)
 
-    elif selected_question == questions[2]:  # Year-Month Distribution of Fundings
+    elif selected_question == questions[2]:
+        st.markdown("#### 📅 Year-Month Distribution of Fundings")
         year_month = df['yearmonth'].value_counts()
-        plt.figure(figsize=(15, 6))
-        sns.barplot(x=year_month.index, y=year_month.values, palette="Blues_d")
-        plt.xticks(rotation=45, fontsize=10)
-        plt.xlabel('Year-Month of Transaction', fontsize=12)
-        plt.ylabel('Number of Fundings Made', fontsize=12)
-        plt.title("Year-Month Distribution of Fundings", fontsize=16)
-        st.pyplot(plt)
+        fig, ax = plt.subplots(figsize=(15, 6))
+        sns.barplot(x=year_month.index, y=year_month.values, palette="Blues_d", ax=ax)
+        ax.set_xlabel('Year-Month')
+        ax.set_ylabel('No. of Fundings')
+        ax.set_title("Year-Month Distribution of Fundings")
+        ax.tick_params(axis='x', rotation=45)
+        show_chart(fig)
 
-    elif selected_question == questions[3]:  # Top 20 Startups by Number of Fundings
+    elif selected_question == questions[3]:
+        st.markdown("#### 🚀 Top 20 Startups by Number of Fundings")
         startupname = df['startup'].value_counts().head(20)
-        plt.figure(figsize=(15, 6))
-        sns.barplot(x=startupname.index, y=startupname.values, palette="coolwarm")
-        plt.xticks(rotation=45, fontsize=10)
-        plt.xlabel('Startup Name', fontsize=12)
-        plt.ylabel('Number of Fundings Made', fontsize=12)
-        plt.title("Top 20 Startups by Number of Fundings", fontsize=16)
+        fig, ax = plt.subplots(figsize=(15, 6))
+        sns.barplot(x=startupname.index, y=startupname.values, palette="coolwarm", ax=ax)
+        ax.set_title("Top 20 Startups")
+        ax.set_ylabel("No. of Fundings")
+        ax.set_xlabel("Startup")
+        ax.tick_params(axis='x', rotation=45)
         for i, v in enumerate(startupname.values):
-            plt.text(i, v + 1, str(v), ha='center', fontsize=9)
-        st.pyplot(plt)
+            ax.text(i, v + 1, str(v), ha='center', fontsize=9)
+        show_chart(fig)
 
-    elif selected_question == questions[4]:  # Top 10 Startups by Total Funding Received
+    elif selected_question == questions[4]:
+        st.markdown("#### 💰 Top 10 Startups by Total Funding Received")
         startup_funding = df.groupby(['startup'])['amount'].sum().sort_values(ascending=False).head(10).reset_index()
-        plt.figure(figsize=(15, 6))
-        sns.barplot(x='startup', y='amount', data=startup_funding, palette="viridis")
-        plt.xticks(rotation=45, fontsize=10)
-        plt.xlabel('Startup Name', fontsize=12)
-        plt.ylabel('Total Funding Amount (Cr)', fontsize=12)
-        plt.title("Top 10 Startups by Total Funding Received", fontsize=16)
+        fig, ax = plt.subplots(figsize=(15, 6))
+        sns.barplot(x='startup', y='amount', data=startup_funding, palette="viridis", ax=ax)
+        ax.set_title("Top 10 Startups by Total Funding")
+        ax.set_ylabel("Total Funding (Cr)")
+        ax.set_xlabel("Startup")
+        ax.tick_params(axis='x', rotation=45)
         for i, v in enumerate(startup_funding['amount']):
-            plt.text(i, v, f"{v:.2f}", ha='center', fontsize=9)
-        st.pyplot(plt)
+            ax.text(i, v, f"{v:.2f}", ha='center', fontsize=9)
+        show_chart(fig)
 
-    elif selected_question == questions[5]:  # Top 10 Industry Verticals by Fundings
+    elif selected_question == questions[5]:
+        st.markdown("#### 🏭 Top 10 Industry Verticals by Fundings")
         industry = df['vertical'].value_counts().head(10)
-        plt.figure(figsize=(15, 6))
-        sns.barplot(x=industry.index, y=industry.values, palette="Set2")
-        plt.xticks(rotation=45, fontsize=10)
-        plt.xlabel('Industry Vertical', fontsize=12)
-        plt.ylabel('Number of Fundings Made', fontsize=12)
-        plt.title("Top 10 Industry Verticals by Fundings", fontsize=16)
+        fig, ax = plt.subplots(figsize=(15, 6))
+        sns.barplot(x=industry.index, y=industry.values, palette="Set2", ax=ax)
+        ax.set_title("Top 10 Industry Verticals")
+        ax.set_ylabel("Fundings")
+        ax.set_xlabel("Vertical")
+        ax.tick_params(axis='x', rotation=45)
         for i, v in enumerate(industry.values):
-            plt.text(i, v + 1, str(v), ha='center', fontsize=9)
-        st.pyplot(plt)
+            ax.text(i, v + 1, str(v), ha='center', fontsize=9)
+        show_chart(fig)
 
-    elif selected_question == questions[6]:  # Top 10 Cities by Number of Fundings
+    elif selected_question == questions[6]:
+        st.markdown("#### 🏙️ Top 10 Cities by Number of Fundings")
         city = df['city'].value_counts().head(10)
-        plt.figure(figsize=(15, 6))
-        sns.barplot(x=city.index, y=city.values, palette="pastel")
-        plt.xticks(rotation=45, fontsize=10)
-        plt.xlabel('City', fontsize=12)
-        plt.ylabel('Number of Fundings Made', fontsize=12)
-        plt.title("Top 10 Cities by Number of Fundings", fontsize=16)
+        fig, ax = plt.subplots(figsize=(15, 6))
+        sns.barplot(x=city.index, y=city.values, palette="pastel", ax=ax)
+        ax.set_title("Top 10 Cities")
+        ax.set_ylabel("Fundings")
+        ax.set_xlabel("City")
+        ax.tick_params(axis='x', rotation=45)
         for i, v in enumerate(city.values):
-            plt.text(i, v + 1, str(v), ha='center', fontsize=9)
-        st.pyplot(plt)
+            ax.text(i, v + 1, str(v), ha='center', fontsize=9)
+        show_chart(fig)
 
-    elif selected_question == questions[7]:  # Wordcloud of Key Investors
+    elif selected_question == questions[7]:
+        st.markdown("#### 🧾 Wordcloud of Key Investors")
         names = df["investors"].dropna()
         wordcloud = WordCloud(max_font_size=50, width=800, height=400, colormap="Dark2").generate(' '.join(names))
-        plt.figure(figsize=(15, 8))
-        plt.imshow(wordcloud, interpolation='bilinear')
-        plt.axis("off")
-        plt.title("Wordcloud of Investors", fontsize=20)
-        st.pyplot(plt)
+        fig, ax = plt.subplots(figsize=(15, 8))
+        ax.imshow(wordcloud, interpolation='bilinear')
+        ax.axis("off")
+        ax.set_title("Wordcloud of Investors", fontsize=20)
+        show_chart(fig)
 
-    elif selected_question == questions[8]:  # Top 10 Investors by Number of Fundings
+    elif selected_question == questions[8]:
+        st.markdown("#### 🧑‍💼 Top 10 Investors by Number of Fundings")
         investors = df['investors'].value_counts().head(10)
-        plt.figure(figsize=(15, 6))
-        sns.barplot(x=investors.index, y=investors.values, palette="RdYlBu")
-        plt.xticks(rotation=45, fontsize=10)
-        plt.xlabel('Investor Name', fontsize=12)
-        plt.ylabel('Number of Fundings Made', fontsize=12)
-        plt.title("Top 10 Investors by Number of Fundings", fontsize=16)
+        fig, ax = plt.subplots(figsize=(15, 6))
+        sns.barplot(x=investors.index, y=investors.values, palette="RdYlBu", ax=ax)
+        ax.set_title("Top 10 Investors")
+        ax.set_ylabel("Fundings")
+        ax.set_xlabel("Investor")
+        ax.tick_params(axis='x', rotation=45)
         for i, v in enumerate(investors.values):
-            plt.text(i, v + 1, str(v), ha='center', fontsize=9)
-        st.pyplot(plt)
+            ax.text(i, v + 1, str(v), ha='center', fontsize=9)
+        show_chart(fig)
 
-    elif selected_question == questions[9]:  # Funding Rounds by Number of Fundings
+    elif selected_question == questions[9]:
+        st.markdown("#### 🧮 Funding Rounds by Number of Fundings")
         investment = df['round'].value_counts().head(8)
-        plt.figure(figsize=(15, 6))
-        sns.barplot(x=investment.index, y=investment.values, palette="coolwarm")
-        plt.xticks(rotation=45, fontsize=10)
-        plt.xlabel('Investment Type', fontsize=12)
-        plt.ylabel('Number of Fundings Made', fontsize=12)
-        plt.title("Funding Rounds by Number of Fundings", fontsize=16)
+        fig, ax = plt.subplots(figsize=(15, 6))
+        sns.barplot(x=investment.index, y=investment.values, palette="coolwarm", ax=ax)
+        ax.set_title("Funding Rounds")
+        ax.set_ylabel("Fundings")
+        ax.set_xlabel("Type")
+        ax.tick_params(axis='x', rotation=45)
         for i, v in enumerate(investment.values):
-            plt.text(i, v + 1, str(v), ha='center', fontsize=9)
-        st.pyplot(plt)
-
+            ax.text(i, v + 1, str(v), ha='center', fontsize=9)
+        show_chart(fig)
